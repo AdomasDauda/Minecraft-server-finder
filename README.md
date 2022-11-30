@@ -11,7 +11,7 @@
   
   Note: Running it on high thread count is not recomended. 16 threads is enough. 
   
-  IT IS VERY SLOW BUT WILL DETECT ALL SERVERS.
+  IT IS CURENLTY VERY SLOW BUT WILL DETECT ALL SERVERS.
   
   
  
