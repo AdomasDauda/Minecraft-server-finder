@@ -9,8 +9,9 @@
   
   It will output `outputfile.txt` that will have information about servers, and `outputfile_raw_ip.txt` for raw ips of the servers that were detected (usefull when trying to ping them for second time)  
   
-  Note: Running it on high thread count is not recomended. 16 threads is enough.
+  Note: Running it on high thread count is not recomended. 16 threads is enough. 
   
+  IT IS VERY SLOW BUT WILL DETECT ALL SERVERS.
   
   
  
