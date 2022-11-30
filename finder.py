@@ -7,12 +7,17 @@ import time
 parser = argparse.ArgumentParser(description='files and stuff')
 parser.add_argument("-o","--outputfile", type=str, help="the name of the file to put in the results")
 #parser.add_argument("-e","--exluded", type=str, help="excluded ips")
-parser.add_argument("-t","--threadcount", type=int, help="amount of threads that is going to be used (recomented 256)")
+parser.add_argument("-t","--threadcount", type=int, help="amount of threads that is going to be used (recomented 256) (has no impact on performance basicaly)")
 args = parser.parse_args()
 
+# curenly useless
 SCAN_IP_START_FROM = 0
+
 SCAN_IP_COUNT = 256
 MINECRAFT_PORT = 25565
+
+# how often refresh the performance timer thing
+REFRESH_RATE_TIMER = 1
 
 THREAD_COUNT = args.threadcount
 OUTPUT_FILE = str(args.outputfile)
@@ -23,7 +28,7 @@ OUTPUT_PLAYER_WITH_SERVER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players_from_
 files = [OUTPUT_FILE, OUTPUT_RAW_IP_FILE, OUTPUT_PLAYER_FILE, OUTPUT_PLAYER_WITH_SERVER_FILE]
 
 if (THREAD_COUNT > 256):
-    exit("TOO MANY THREADS SPECIFIED (max 256) (recomened 16)")
+    exit("TOO MANY THREADS SPECIFIED (recomended 256 max 256)")
 
 for file in files:
     try:
@@ -76,7 +81,7 @@ def scanPorts(rangestart, rangeend):
                         # if server responds
                         print(f"Found a server at: {ip}:{MINECRAFT_PORT} with latency: {status.latency} and {status.players.online} players online. \n")
                         with open(OUTPUT_FILE, "a") as file:
-                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online}")
+                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online} \n")
                             file.close()
                         with open(OUTPUT_RAW_IP_FILE, "a") as file:
                             file.write(f"{ip}:{MINECRAFT_PORT} \n")
@@ -106,12 +111,12 @@ for i in range(THREAD_COUNT):
 
 # for measuing the rate
 def rate():
-    print("RATE ON")
+    amount_of_servers = 255*255*255*255
     start = time.perf_counter()
-    next_time = 5
+    next_time = REFRESH_RATE_TIMER
     while True:
         if time.perf_counter() - start > next_time:
-            next_time = time.perf_counter() - start + 5
-            print(f"{round(scanned / (time.perf_counter() - start))} server pings/second", end='\r')
+            next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
+            print(f"{round(scanned / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {amount_of_servers/round(scanned / (time.perf_counter() - start))/60/60}hrs", end='\r')
 
 threading.Thread(None, target=rate).start()
