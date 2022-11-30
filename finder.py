@@ -1,4 +1,5 @@
 from mcstatus import JavaServer
+from mcstatus import P
 import threading
 import argparse
 
@@ -63,9 +64,9 @@ def scanPorts(rangestart, rangeend):
                         pass
                     else:
                         # if server responds
-                        print(f"Found a server at: {ip}:{MINECRAFT_PORT} with latency: {status.latency} and {status.players.online} players online.")
+                        print(f"Found a server at: {ip}:{MINECRAFT_PORT} with latency: {status.latency} and {status.players.online} players online. \n")
                         with open(OUTPUT_FILE, "a") as file:
-                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online}")
+                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online} \n")
                             file.close()
                         with open(OUTPUT_RAW_IP_FILE, "a") as file:
                             file.write(f"{ip}:{MINECRAFT_PORT}")
