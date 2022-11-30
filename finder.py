@@ -5,21 +5,15 @@ import time
 
 
 parser = argparse.ArgumentParser(description='files and stuff')
-parser.add_argument("-o","--outputfile", type=str, help="the name of the file to put in the results")
-#parser.add_argument("-e","--exluded", type=str, help="excluded ips")
-parser.add_argument("-t","--threadcount", type=int, help="amount of threads that is going to be used (recomented 256) (has no impact on performance basicaly)")
+parser.add_argument("-o","--outputfile", type=str, help="the name of the file to put in the results", required=True)
 args = parser.parse_args()
 
-# curenly useless
-SCAN_IP_START_FROM = 0
-
-SCAN_IP_COUNT = 256
 MINECRAFT_PORT = 25565
 
 # how often refresh the performance timer thing
 REFRESH_RATE_TIMER = 1
 
-THREAD_COUNT = args.threadcount
+THREAD_COUNT = 65536
 OUTPUT_FILE = str(args.outputfile)
 OUTPUT_RAW_IP_FILE = OUTPUT_FILE.split(".")[0]+"_raw_ips.txt"
 OUTPUT_PLAYER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players.txt"
@@ -27,46 +21,41 @@ OUTPUT_PLAYER_WITH_SERVER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players_from_
 
 files = [OUTPUT_FILE, OUTPUT_RAW_IP_FILE, OUTPUT_PLAYER_FILE, OUTPUT_PLAYER_WITH_SERVER_FILE]
 
-if (THREAD_COUNT > 256):
-    exit("TOO MANY THREADS SPECIFIED (recomended 256 max 256)")
-
 for file in files:
     try:
         open(file, "x")
     except:
         print(f"{file} was already there")
 
-per_thread_ip_count = SCAN_IP_COUNT/THREAD_COUNT
-left_over = SCAN_IP_COUNT % THREAD_COUNT
-
-print(f"left over: {left_over} per thread: {per_thread_ip_count}")
-
 class onthread(threading.Thread):
-    def __init__(self, threadID, rangestart, rangeend):
+    def __init__(self, threadID, rangestarti, rangeendi, rangestartj, rangeendj):
         threading.Thread.__init__(self)
         self.threadID = threadID
-        self.rangestart = int(rangestart)
-        self.rangeend = int(rangeend)
+        self.rangestarti = int(rangestarti)
+        self.rangeendi = int(rangeendi)
+        self.rangestartj = int(rangestartj)
+        self.rangeendj = int(rangeendj)
     def run(self):
         # DRIVER CODE
-        scanPorts(self.rangestart, self.rangeend)
-        print (f"{self.rangestart} - {self.rangeend} finished by: " + self.name)
+        scanPorts(self.rangestarti, self.rangeendi, self.rangestartj, self.rangeendj)
+        print (f"{self.rangestarti}.{self.rangestartj} - {self.rangeendi}.{self.rangeendj} finished by: " + self.name)
 
 scanned = 0
 
-def scanPorts(rangestart, rangeend):
+def scanPorts(rangestarti, rangeendi, rangestartj, rangeendj):
     # to stop dinamicaly allocating memory
     i = 0
     j = 0
     p = 0
     k = 0
-    ilist = [i for i in range(rangestart, rangeend)]
+    ilist = [i for i in range(rangestarti, rangeendi)]
+    jlist = [j for j in range(rangestartj, rangeendj)]
     list = [i for i in range(0, 256)]
     ############################################
 
     status = JavaServer
     for i in ilist:
-        for j in list:
+        for j in jlist:
             for p in list:
                 for k in list:
                     # the ip we are testing
@@ -80,8 +69,10 @@ def scanPorts(rangestart, rangeend):
                     else:
                         # if server responds
                         print(f"Found a server at: {ip}:{MINECRAFT_PORT} with latency: {status.latency} and {status.players.online} players online. \n")
+
+                        #######################################################################################################################
                         with open(OUTPUT_FILE, "a") as file:
-                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online} \n")
+                            file.write(f"{ip}:{MINECRAFT_PORT} Version: {status.version.name} Latency: {status.latency} Curently online: {status.players.online} \n")
                             file.close()
                         with open(OUTPUT_RAW_IP_FILE, "a") as file:
                             file.write(f"{ip}:{MINECRAFT_PORT} \n")
@@ -103,20 +94,22 @@ def scanPorts(rangestart, rangeend):
                     global scanned
                     scanned += 1
 
-for i in range(THREAD_COUNT):
-    if i == THREAD_COUNT:
-        # because we give more to our last thread if we didnt spread it equaly
-        onthread(i, i*per_thread_ip_count+SCAN_IP_START_FROM, i*per_thread_ip_count+per_thread_ip_count+left_over+SCAN_IP_START_FROM).start()
-    onthread(i, i*per_thread_ip_count+SCAN_IP_START_FROM, i*per_thread_ip_count+per_thread_ip_count+SCAN_IP_START_FROM).start()
-
 # for measuing the rate
 def rate():
     amount_of_servers = 255*255*255*255
     start = time.perf_counter()
     next_time = REFRESH_RATE_TIMER
+    last_scan = 0
     while True:
         if time.perf_counter() - start > next_time:
             next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
-            print(f"{round(scanned / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {amount_of_servers/round(scanned / (time.perf_counter() - start))/60/60}hrs", end='\r')
+            print(f"{round(scanned - last_scan / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {amount_of_servers/round(scanned - last_scan / (time.perf_counter() - start))/60/60}hrs", end='\r')
+            last_scan = scanned
 
 threading.Thread(None, target=rate).start()
+
+for i in range(256):
+    print(f"                                                                                        ",end='\r')
+    print(f"{i}/256 tread groups started",end='\r\n')
+    for j in range(256):
+        onthread(None, i, i+1, j, j+1).start()
