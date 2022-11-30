@@ -1,5 +1,4 @@
 from mcstatus import JavaServer
-from mcstatus import P
 import threading
 import argparse
 
