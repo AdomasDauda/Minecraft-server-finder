@@ -1,17 +1,20 @@
 import threading
 import time
 import socket
-from mcstatus import JavaServer
 import argparse
 from utils import Logger
+from mcstatus import JavaServer
+import struct
 
 # whre you want to startt on 1st quadrant
-START = 0
+START = 20
 
 REFRESH_RATE_TIMER = 1
-scanned = 1
+scanned = 0
+found = 0
 # how much you want to wait before closing connection
-SCAN_TIMEOUT = 5
+SCAN_TIMEOUT = 2
+PORT = 25565
 
 parser = argparse.ArgumentParser(description='files and stuff')
 parser.add_argument("-o","--outputfile", type=str, required=True, help="the name of the file to put in the results")
@@ -31,7 +34,6 @@ for file in files:
     except:
         print(f"{file} was already there")
 
-
 def ip_generator():
     # stop dinamicaly generating
     list = [i for i in range(256)]
@@ -41,8 +43,7 @@ def ip_generator():
             for p in list:
                 for k in list:
                     yield f"{i}.{j}.{p}.{k}"
-    #we ran all the ips
-    #yield f"0.0.0.0"
+    yield f"0.0.0.0"
 
 ip_generator_object = ip_generator()
 
@@ -54,38 +55,47 @@ def rate():
     next_time = REFRESH_RATE_TIMER + SCAN_TIMEOUT
     while True:
         if time.perf_counter() - start > next_time:
-            if scanned != 1:
-                next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
-                # printing stats
-                print(f"{round(scanned / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {round(amount_of_servers/round(scanned / (time.perf_counter() - start))/60/60)}hrs SCANED: {scanned}        ", end='\r')
-                last = scanned
+            next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
+            # printing stats
+            try:
+                print(f"{scanned / (time.perf_counter() - start)} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {round(amount_of_servers/(scanned / (time.perf_counter() - start))/60/60)}hrs SCANED: {scanned} FOUND: {found}        ", end='\r')
+            except ZeroDivisionError:
+                print(scanned, end='\r')
 
 threading.Thread(None, target=rate).start()
 
 def scan_ips():
-    # make socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(SCAN_TIMEOUT)
     while True:
+        # https://stackoverflow.com/questions/54437148/python-socket-connect-an-invalid-argument-was-supplied-oserror-winerror
+        # for measuring performance
         ip = next(ip_generator_object)
+        sock = socket.socket()
+        sock.settimeout(SCAN_TIMEOUT)
         try:
-            sock.connect((ip, 25565))
-        except:
+            sock.connect((ip, PORT))
+        except TimeoutError:
+            pass
+        except ConnectionRefusedError:
             pass
         else:
-            # if connected 
+            global found
+            found += 1
+            logger.addLog(f"found {ip}")
+            # if connected
             with open(OUTPUT_RAW_IP_FILE, "a") as file:
                 file.write(f"{ip} \n")
                 file.close()
 
-            logger.addLog(f"{ip} with socket")
+            logger.addLog(f"{ip} with socket ")
             sock.close()
-    
-        # for measuring performance
+            sock = socket.socket()
+            sock.settimeout(SCAN_TIMEOUT)
+
         global scanned
         scanned += 1
+    
 
-threads_count = 5000
+threads_count = 10000
 for i in range(threads_count):
     #spawning a bunch of threads really doesnt matter how many
     threading.Thread(None, target=scan_ips).start()
