@@ -6,8 +6,7 @@ from utils import Logger
 from mcstatus import JavaServer
 import struct
 
-# whre you want to startt on 1st quadrant
-START = 20
+
 
 REFRESH_RATE_TIMER = 1
 scanned = 0
@@ -18,7 +17,13 @@ PORT = 25565
 
 parser = argparse.ArgumentParser(description='files and stuff')
 parser.add_argument("-o","--outputfile", type=str, required=True, help="the name of the file to put in the results")
+parser.add_argument("-s","--start", type=int, required=True, help="start")
+parser.add_argument("-e","--end", type=int, required=True, help="end")
 args = parser.parse_args()
+
+# whre you want to startt on 1st quadrant
+START = args.start
+END = args.end
 
 OUTPUT_FILE = str(args.outputfile)
 OUTPUT_RAW_IP_FILE = OUTPUT_FILE.split(".")[0]+"_raw_ips.txt"
@@ -38,7 +43,7 @@ def ip_generator():
     # stop dinamicaly generating
     list = [i for i in range(256)]
     # if you want to change where you are scanning from
-    for i in range(START,256):
+    for i in range(START,END):
         for j in list:
             for p in list:
                 for k in list:
@@ -50,7 +55,7 @@ ip_generator_object = ip_generator()
 # for measuing the rate
 def rate():
     # the amout of servers we are going to scan
-    amount_of_servers = (255-START)*255*255*255
+    amount_of_servers = (END-1-START)*255*255*255
     start = time.perf_counter()
     next_time = REFRESH_RATE_TIMER + SCAN_TIMEOUT
     while True:
@@ -74,26 +79,44 @@ def scan_ips():
         try:
             sock.connect((ip, PORT))
         except TimeoutError:
-            pass
+            sock.close()
         except ConnectionRefusedError:
-            pass
+            sock.close()
         else:
             global found
             found += 1
-            logger.addLog(f"found {ip}")
-            # if connected
-            with open(OUTPUT_RAW_IP_FILE, "a") as file:
-                file.write(f"{ip} \n")
-                file.close()
-
-            logger.addLog(f"{ip} with socket ")
+            logger.addLog(f"{ip} is online with open {PORT} port")
             sock.close()
-            sock = socket.socket()
-            sock.settimeout(SCAN_TIMEOUT)
 
         global scanned
         scanned += 1
     
+def get_server_info(ip):
+    try:
+        status = JavaServer(ip, PORT).status()
+    except:
+        logger.addLog(f"{ip} is not a minecraft server")
+    else:
+        # if connected
+        # add ip to ip list
+        with open(OUTPUT_RAW_IP_FILE, "a") as file:
+            file.write(f"{ip} \n")
+            file.close()
+        # add stuff to out file
+        with open(OUTPUT_FILE, 'a') as file:
+            file.write(f"{ip} Latency: {status.latency} Online players: {status.players.online}\n")
+            file.close()
+
+        # try and extract players
+        try:
+            query = JavaServer(ip, PORT).query()
+        except:
+            logger.addLog(f"{ip} was a minecraft server but has no query open")
+        else:
+            with open(OUTPUT_PLAYER_WITH_SERVER_FILE, 'a') as file:
+                for player in query.players.names:
+                    file.write(player)                
+                file.close()
 
 threads_count = 10000
 for i in range(threads_count):
