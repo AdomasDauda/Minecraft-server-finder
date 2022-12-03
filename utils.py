@@ -10,13 +10,22 @@ class Logger():
             print(f"[LOGGER] {self.fileName} file was already there")
 
     def addLog(self, log):
-        with open(self.fileName, 'a') as file:
-            file.write('[LOG]'+str(log)+'\n')
-    
+        try:
+            with open(self.fileName, 'a') as file:
+                file.write('[LOG]'+str(log)+'\n')
+        except FileNotFoundError:
+            self.initFile()
+
     def addWarn(self, log):
-        with open(self.fileName, 'a') as file:
-            file.write('[WARN]'+str(log)+'\n')
+        try:
+            with open(self.fileName, 'a') as file:
+                file.write('[WARN]'+str(log)+'\n')
+        except FileNotFoundError:
+            self.initFile()
 
     def addError(self, log):
-        with open(self.fileName, 'a') as file:
-            file.write('[ERROR]'+str(log)+'\n')
+        try:
+            with open(self.fileName, 'a') as file:
+                file.write('[ERROR]'+str(log)+'\n')
+        except FileNotFoundError:
+            self.initFile()

@@ -4,15 +4,13 @@ import socket
 import argparse
 from utils import Logger
 from mcstatus import JavaServer
-import struct
-
 
 
 REFRESH_RATE_TIMER = 1
 scanned = 0
 found = 0
 # how much you want to wait before closing connection
-SCAN_TIMEOUT = 2
+SCAN_TIMEOUT = 5
 PORT = 25565
 
 parser = argparse.ArgumentParser(description='files and stuff')
@@ -72,7 +70,7 @@ threading.Thread(None, target=rate).start()
 def scan_ips():
     while True:
         # https://stackoverflow.com/questions/54437148/python-socket-connect-an-invalid-argument-was-supplied-oserror-winerror
-        # for measuring performance
+        # the problem is we can not use the same socket fast enough because we will get OS error
         ip = next(ip_generator_object)
         sock = socket.socket()
         sock.settimeout(SCAN_TIMEOUT)
@@ -87,6 +85,7 @@ def scan_ips():
             found += 1
             logger.addLog(f"{ip} is online with open {PORT} port")
             sock.close()
+            get_server_info(ip)
 
         global scanned
         scanned += 1
@@ -118,9 +117,14 @@ def get_server_info(ip):
                     file.write(player)                
                 file.close()
 
-threads_count = 10000
-for i in range(threads_count):
+def start_threads():
+    threads_count = 5000
+    for i in range(threads_count):
+        #spawning a bunch of threads really doesnt matter how many
+        threading.Thread(None, target=scan_ips).start()
+
+for i in range(30):
     #spawning a bunch of threads really doesnt matter how many
-    threading.Thread(None, target=scan_ips).start()
+    threading.Thread(None, target=start_threads).start()
 
 print("Finished loading threads", end='\n')

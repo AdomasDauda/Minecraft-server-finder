@@ -3,8 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# vs code
+.vscode/
+
+# test scripts
+test*.py
+
 # C extensions
 *.so
+
+# Log files made by finder so don't leak ips by accident
+*.txt
 
 # Distribution / packaging
 .Python
