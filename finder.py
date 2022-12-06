@@ -1,16 +1,17 @@
 import threading
 import time
 import socket
-from mcstatus import JavaServer
 import argparse
 from utils import Logger
-
+from mcstatus import JavaServer
 
 
 REFRESH_RATE_TIMER = 1
-scanned = 1
+scanned = 0
+found = 0
 # how much you want to wait before closing connection
-SCAN_TIMEOUT = 2 
+SCAN_TIMEOUT = 5
+PORT = 25565
 
 parser = argparse.ArgumentParser(description='files and stuff')
 parser.add_argument("-o","--outputfile", type=str, required=True, help="the name of the file to put in the results")
@@ -18,26 +19,23 @@ parser.add_argument("-s","--start", type=int, required=True, help="start")
 parser.add_argument("-e","--end", type=int, required=True, help="end")
 args = parser.parse_args()
 
+# whre you want to startt on 1st quadrant
+START = args.start
+END = args.end
+
 OUTPUT_FILE = str(args.outputfile)
 OUTPUT_RAW_IP_FILE = OUTPUT_FILE.split(".")[0]+"_raw_ips.txt"
 OUTPUT_PLAYER_WITH_SERVER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players.txt"
 
 files = [OUTPUT_FILE, OUTPUT_RAW_IP_FILE, OUTPUT_PLAYER_WITH_SERVER_FILE]
 
-# whre you want to start/end on 1st quadrant
-START = args.start
-END = args.end
-
 logger = Logger('logs.txt')
-
-logger.addLog(f"New finder instance {START}:{END}")
 
 for file in files:
     try:
         open(file, "x")
     except:
         print(f"{file} was already there")
-
 
 def ip_generator():
     # stop dinamicaly generating
@@ -47,10 +45,8 @@ def ip_generator():
         for j in list:
             for p in list:
                 for k in list:
-                    yield "209.222.115.30"
-                    #yield f"{i}.{j}.{p}.{k}"
-    #we ran all the ips
-    #yield f"0.0.0.0"
+                    yield f"{i}.{j}.{p}.{k}"
+    yield f"0.0.0.0"
 
 ip_generator_object = ip_generator()
 
@@ -62,40 +58,73 @@ def rate():
     next_time = REFRESH_RATE_TIMER + SCAN_TIMEOUT
     while True:
         if time.perf_counter() - start > next_time:
-            if scanned != 1:
-                next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
-                # printing stats
-                print(f"{round(scanned / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {round(amount_of_servers/round(scanned / (time.perf_counter() - start))/60/60)}hrs SCANED: {scanned}        ", end='\r')
-                last = scanned
+            next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
+            # printing stats
+            try:
+                print(f"{scanned / (time.perf_counter() - start)} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {round(amount_of_servers/(scanned / (time.perf_counter() - start))/60/60)}hrs SCANED: {scanned} FOUND: {found}        ", end='\r')
+            except ZeroDivisionError:
+                print(scanned, end='\r')
 
 threading.Thread(None, target=rate).start()
 
 def scan_ips():
-    status = JavaServer("0.0.0.0", 25565)
-    # make socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(SCAN_TIMEOUT)
     while True:
+        # https://stackoverflow.com/questions/54437148/python-socket-connect-an-invalid-argument-was-supplied-oserror-winerror
+        # the problem is we can not use the same socket fast enough because we will get OS error
         ip = next(ip_generator_object)
+        sock = socket.socket()
+        sock.settimeout(SCAN_TIMEOUT)
         try:
-            status = JavaServer(ip, 25565, timeout=SCAN_TIMEOUT).status()
-        except:
-            pass
+            sock.connect((ip, PORT))
+        except TimeoutError:
+            sock.close()
+        except ConnectionRefusedError:
+            sock.close()
         else:
-            # if connected 
-            with open(OUTPUT_RAW_IP_FILE, "a") as file:
-                file.write(f"{ip} \n")
-                file.close()
+            global found
+            found += 1
+            logger.addLog(f"{ip} is online with open {PORT} port")
+            sock.close()
+            get_server_info(ip)
 
-            logger.addLog(f"{ip} with socket {status.description}")
-    
-        # for measuring performance
         global scanned
         scanned += 1
+    
+def get_server_info(ip):
+    try:
+        status = JavaServer(ip, PORT).status()
+    except:
+        logger.addLog(f"{ip} is not a minecraft server")
+    else:
+        # if connected
+        # add ip to ip list
+        with open(OUTPUT_RAW_IP_FILE, "a") as file:
+            file.write(f"{ip} \n")
+            file.close()
+        # add stuff to out file
+        with open(OUTPUT_FILE, 'a') as file:
+            file.write(f"{ip} Latency: {status.latency} Online players: {status.players.online}\n")
+            file.close()
 
-threads_count = 10000
-for i in range(threads_count):
+        # try and extract players
+        try:
+            query = JavaServer(ip, PORT).query()
+        except:
+            logger.addLog(f"{ip} was a minecraft server but has no query open")
+        else:
+            with open(OUTPUT_PLAYER_WITH_SERVER_FILE, 'a') as file:
+                for player in query.players.names:
+                    file.write(player)                
+                file.close()
+
+def start_threads():
+    threads_count = 5000
+    for i in range(threads_count):
+        #spawning a bunch of threads really doesnt matter how many
+        threading.Thread(None, target=scan_ips).start()
+
+for i in range(30):
     #spawning a bunch of threads really doesnt matter how many
-    threading.Thread(None, target=scan_ips).start()
+    threading.Thread(None, target=start_threads).start()
 
 print("Finished loading threads", end='\n')
