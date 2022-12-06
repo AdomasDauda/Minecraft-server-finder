@@ -1,29 +1,36 @@
-from mcstatus import JavaServer
 import threading
-import argparse
 import time
+import socket
+from mcstatus import JavaServer
+import argparse
+from utils import Logger
 
+
+
+REFRESH_RATE_TIMER = 1
+scanned = 1
+# how much you want to wait before closing connection
+SCAN_TIMEOUT = 2 
 
 parser = argparse.ArgumentParser(description='files and stuff')
-parser.add_argument("-o","--outputfile", type=str, help="the name of the file to put in the results")
-#parser.add_argument("-e","--exluded", type=str, help="excluded ips")
-parser.add_argument("-t","--threadcount", type=int, help="amount of threads that is going to be used (recomented 256)")
+parser.add_argument("-o","--outputfile", type=str, required=True, help="the name of the file to put in the results")
+parser.add_argument("-s","--start", type=int, required=True, help="start")
+parser.add_argument("-e","--end", type=int, required=True, help="end")
 args = parser.parse_args()
 
-SCAN_IP_START_FROM = 0
-SCAN_IP_COUNT = 256
-MINECRAFT_PORT = 25565
-
-THREAD_COUNT = args.threadcount
 OUTPUT_FILE = str(args.outputfile)
 OUTPUT_RAW_IP_FILE = OUTPUT_FILE.split(".")[0]+"_raw_ips.txt"
-OUTPUT_PLAYER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players.txt"
-OUTPUT_PLAYER_WITH_SERVER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players_from_servers.txt"
+OUTPUT_PLAYER_WITH_SERVER_FILE = OUTPUT_FILE.split(".")[0]+"_found_players.txt"
 
-files = [OUTPUT_FILE, OUTPUT_RAW_IP_FILE, OUTPUT_PLAYER_FILE, OUTPUT_PLAYER_WITH_SERVER_FILE]
+files = [OUTPUT_FILE, OUTPUT_RAW_IP_FILE, OUTPUT_PLAYER_WITH_SERVER_FILE]
 
-if (THREAD_COUNT > 256):
-    exit("TOO MANY THREADS SPECIFIED (max 256) (recomened 16)")
+# whre you want to start/end on 1st quadrant
+START = args.start
+END = args.end
+
+logger = Logger('logs.txt')
+
+logger.addLog(f"New finder instance {START}:{END}")
 
 for file in files:
     try:
@@ -31,87 +38,64 @@ for file in files:
     except:
         print(f"{file} was already there")
 
-per_thread_ip_count = SCAN_IP_COUNT/THREAD_COUNT
-left_over = SCAN_IP_COUNT % THREAD_COUNT
 
-print(f"left over: {left_over} per thread: {per_thread_ip_count}")
-
-class onthread(threading.Thread):
-    def __init__(self, threadID, rangestart, rangeend):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.rangestart = int(rangestart)
-        self.rangeend = int(rangeend)
-    def run(self):
-        # DRIVER CODE
-        scanPorts(self.rangestart, self.rangeend)
-        print (f"{self.rangestart} - {self.rangeend} finished by: " + self.name)
-
-scanned = 0
-
-def scanPorts(rangestart, rangeend):
-    # to stop dinamicaly allocating memory
-    i = 0
-    j = 0
-    p = 0
-    k = 0
-    ilist = [i for i in range(rangestart, rangeend)]
-    list = [i for i in range(0, 256)]
-    ############################################
-
-    status = JavaServer
-    for i in ilist:
+def ip_generator():
+    # stop dinamicaly generating
+    list = [i for i in range(256)]
+    # if you want to change where you are scanning from
+    for i in range(START,END):
         for j in list:
             for p in list:
                 for k in list:
-                    # the ip we are testing
-                    ip = f"{i}.{j}.{p}.{k}"
-                    # lets do some checks
-                    try:
-                        status = JavaServer(ip, MINECRAFT_PORT).status()
-                    except OSError:
-                        # if server doesnt respond
-                        pass
-                    else:
-                        # if server responds
-                        print(f"Found a server at: {ip}:{MINECRAFT_PORT} with latency: {status.latency} and {status.players.online} players online. \n")
-                        with open(OUTPUT_FILE, "a") as file:
-                            file.write(f"{ip}:{MINECRAFT_PORT} Latency: {status.latency} Curently online: {status.players.online}")
-                            file.close()
-                        with open(OUTPUT_RAW_IP_FILE, "a") as file:
-                            file.write(f"{ip}:{MINECRAFT_PORT} \n")
-                            file.close()
+                    yield "209.222.115.30"
+                    #yield f"{i}.{j}.{p}.{k}"
+    #we ran all the ips
+    #yield f"0.0.0.0"
 
-                        # try and pull players from the server
-                            try: 
-                                query = JavaServer(ip, MINECRAFT_PORT).query()
-                                with open(OUTPUT_PLAYER_FILE, "a") as file:
-                                    for player in query.players.names:
-                                        file.write(f"{player}\n")
-                                    file.close()
-                                with open(OUTPUT_PLAYER_WITH_SERVER_FILE, "a") as file:
-                                    file.write(f"{ip}:{MINECRAFT_PORT} players online: {query.players.names}\n")
-                                    file.close()
-                            except:
-                                print(f"Could not get player names from the server {ip}")
-                    status = None
-                    global scanned
-                    scanned += 1
-
-for i in range(THREAD_COUNT):
-    if i == THREAD_COUNT:
-        # because we give more to our last thread if we didnt spread it equaly
-        onthread(i, i*per_thread_ip_count+SCAN_IP_START_FROM, i*per_thread_ip_count+per_thread_ip_count+left_over+SCAN_IP_START_FROM).start()
-    onthread(i, i*per_thread_ip_count+SCAN_IP_START_FROM, i*per_thread_ip_count+per_thread_ip_count+SCAN_IP_START_FROM).start()
+ip_generator_object = ip_generator()
 
 # for measuing the rate
 def rate():
-    print("RATE ON")
+    # the amout of servers we are going to scan
+    amount_of_servers = (END-1-START)*255*255*255
     start = time.perf_counter()
-    next_time = 5
+    next_time = REFRESH_RATE_TIMER + SCAN_TIMEOUT
     while True:
         if time.perf_counter() - start > next_time:
-            next_time = time.perf_counter() - start + 5
-            print(f"{round(scanned / (time.perf_counter() - start))} server pings/second", end='\r')
+            if scanned != 1:
+                next_time = time.perf_counter() - start + REFRESH_RATE_TIMER
+                # printing stats
+                print(f"{round(scanned / (time.perf_counter() - start))} server pings/second. Progress: {round(scanned/amount_of_servers)*100}% Estimated time left: {round(amount_of_servers/round(scanned / (time.perf_counter() - start))/60/60)}hrs SCANED: {scanned}        ", end='\r')
+                last = scanned
 
 threading.Thread(None, target=rate).start()
+
+def scan_ips():
+    status = JavaServer("0.0.0.0", 25565)
+    # make socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(SCAN_TIMEOUT)
+    while True:
+        ip = next(ip_generator_object)
+        try:
+            status = JavaServer(ip, 25565, timeout=SCAN_TIMEOUT).status()
+        except:
+            pass
+        else:
+            # if connected 
+            with open(OUTPUT_RAW_IP_FILE, "a") as file:
+                file.write(f"{ip} \n")
+                file.close()
+
+            logger.addLog(f"{ip} with socket {status.description}")
+    
+        # for measuring performance
+        global scanned
+        scanned += 1
+
+threads_count = 10000
+for i in range(threads_count):
+    #spawning a bunch of threads really doesnt matter how many
+    threading.Thread(None, target=scan_ips).start()
+
+print("Finished loading threads", end='\n')
